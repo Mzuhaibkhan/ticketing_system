@@ -17,6 +17,38 @@ services:
       timeout: 5s
       retries: 5
 
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: supportdesk_backend
+    restart: always
+    environment:
+      DATABASE_URL: postgresql+psycopg://postgres:postgres@db:5432/supportdesk
+      CORS_ORIGINS: '["http://localhost:3000","http://127.0.0.1:3000"]'
+      OVERDUE_HOURS: 24
+      APP_ENV: production
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: http://localhost:8000
+    container_name: supportdesk_frontend
+    restart: always
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+
 volumes:
   postgres_data:
-
