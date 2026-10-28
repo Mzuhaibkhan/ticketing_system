@@ -33,6 +33,36 @@ class NotFoundError(AppError):
         )
 
 
+class ConflictError(AppError):
+    def __init__(self, message: str = "Conflict detected", code: str = "conflict", details: Optional[List[dict]] = None):
+        super().__init__(
+            code=code,
+            message=message,
+            status_code=status.HTTP_409_CONFLICT,
+            details=details
+        )
+
+
+class ForbiddenError(AppError):
+    def __init__(self, message: str = "Permission denied", code: str = "forbidden", details: Optional[List[dict]] = None):
+        super().__init__(
+            code=code,
+            message=message,
+            status_code=status.HTTP_403_FORBIDDEN,
+            details=details
+        )
+
+
+class UnauthorizedError(AppError):
+    def __init__(self, message: str = "Authentication required", code: str = "unauthorized", details: Optional[List[dict]] = None):
+        super().__init__(
+            code=code,
+            message=message,
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            details=details
+        )
+
+
 def register_exception_handlers(app: FastAPI) -> None:
     @app.exception_handler(AppError)
     async def app_error_handler(request: Request, exc: AppError):

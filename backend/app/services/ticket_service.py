@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session, joinedload
 from app.config import settings
 from app.models import (
     Agent,
+    AgentRole,
     Ticket,
     TicketStatus,
     TicketPriority,
@@ -13,7 +14,7 @@ from app.models import (
     EventType,
 )
 from app.schemas.ticket import TicketCreate, TicketUpdate, TicketOut
-from app.core.errors import AppError, NotFoundError
+from app.core.errors import AppError, NotFoundError, ConflictError, ForbiddenError
 
 
 def overdue_clause(now: Optional[datetime] = None):
@@ -64,6 +65,8 @@ def create_ticket(db: Session, data: TicketCreate) -> Ticket:
         created_at=now,
         updated_at=now,
         resolved_at=resolved_at,
+        first_responded_at=None,
+        version=1,
     )
     db.add(ticket)
     db.flush()
@@ -146,12 +149,12 @@ def list_tickets(
     if overdue is True:
         query = query.filter(overdue_clause(now))
 
-    # Total count before pagination
+    # Total count before pagination (uses exact same filters)
     total = query.count()
 
-    # Sorting
+    # Sorting with Ticket.id DESC tie-breaker for deterministic pagination
     if sort == "priority":
-        # Urgent -> High -> Medium -> Low, ties broken by updated_at DESC
+        # Urgent -> High -> Medium -> Low, ties broken by updated_at DESC, then id DESC
         priority_rank = case(
             (Ticket.priority == TicketPriority.URGENT, 1),
             (Ticket.priority == TicketPriority.HIGH, 2),
@@ -159,10 +162,12 @@ def list_tickets(
             (Ticket.priority == TicketPriority.LOW, 4),
             else_=5
         )
-        query = query.order_by(priority_rank.asc(), Ticket.updated_at.desc())
+        query = query.order_by(priority_rank.asc(), Ticket.updated_at.desc(), Ticket.id.desc())
+    elif sort == "created":
+        query = query.order_by(Ticket.created_at.desc(), Ticket.id.desc())
     else:
-        # Default: updated_at DESC
-        query = query.order_by(Ticket.updated_at.desc())
+        # Default: updated_at DESC, id DESC
+        query = query.order_by(Ticket.updated_at.desc(), Ticket.id.desc())
 
     # Pagination
     offset = (max(1, page) - 1) * page_size
@@ -193,8 +198,31 @@ def update_ticket(
         )
 
     update_dict = data.model_dump(exclude_unset=True)
+
+    # Optimistic locking validation
+    expected_version = update_dict.pop("expected_version", None)
+    current_version = getattr(ticket, "version", 1) or 1
+    if expected_version is not None and expected_version != current_version:
+        raise ConflictError(
+            code="conflict",
+            message=f"Ticket was modified by another user (current version: {current_version}, expected: {expected_version})",
+            details=[{"field": "version", "message": f"Expected version {expected_version}, but found {current_version}"}]
+        )
+
     actor_id = update_dict.pop("actor_id", None)
     actor_name = get_actor_name(db, actor_id)
+    acting_agent = db.query(Agent).filter(Agent.id == actor_id).first() if actor_id else None
+
+    # Role permission check: An Agent may assign an unassigned ticket, but cannot reassign one owned by another agent
+    if "assignee_id" in update_dict:
+        new_assignee_id = update_dict["assignee_id"]
+        if new_assignee_id != ticket.assignee_id:
+            if ticket.assignee_id is not None and acting_agent and acting_agent.role == AgentRole.AGENT:
+                if ticket.assignee_id != acting_agent.id:
+                    raise ForbiddenError(
+                        code="forbidden",
+                        message="Agents cannot reassign tickets assigned to other agents"
+                    )
 
     events_to_add: List[TicketEvent] = []
     has_changes = False
@@ -310,8 +338,9 @@ def update_ticket(
             )
         )
 
-    # If changes made, update updated_at and commit once
+    # If changes made, bump version and updated_at, then commit once
     if has_changes:
+        ticket.version = current_version + 1
         ticket.updated_at = now
         for ev in events_to_add:
             db.add(ev)
@@ -319,4 +348,3 @@ def update_ticket(
         db.refresh(ticket)
 
     return ticket
-

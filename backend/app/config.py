@@ -9,12 +9,29 @@ class Settings(BaseSettings):
     CORS_ORIGINS: Union[List[str], str] = ["http://localhost:3000", "http://127.0.0.1:3000"]
     OVERDUE_HOURS: int = 24
     APP_ENV: str = "development"
+    JWT_SECRET: str = "super-secret-jwt-key-for-dev-change-in-prod"
+    JWT_ALGORITHM: str = "HS256"
+    JWT_EXPIRY_MINUTES: int = 60 * 24
+    SLA_HOURS: Union[dict[str, int], str] = {"urgent": 4, "high": 8, "medium": 24, "low": 48}
 
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
         extra="ignore"
     )
+
+    @field_validator("SLA_HOURS", mode="before")
+    @classmethod
+    def parse_sla_hours(cls, v: Union[dict[str, int], str]) -> dict[str, int]:
+        if isinstance(v, str):
+            try:
+                parsed = json.loads(v)
+                return {str(k).lower(): int(val) for k, val in parsed.items()}
+            except Exception:
+                pass
+        if isinstance(v, dict):
+            return {str(k).lower(): int(val) for k, val in v.items()}
+        return {"urgent": 4, "high": 8, "medium": 24, "low": 48}
 
     @field_validator("DATABASE_URL", mode="before")
     @classmethod

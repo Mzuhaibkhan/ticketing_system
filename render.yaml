@@ -11,9 +11,9 @@ services:
     runtime: python
     rootDir: backend
     plan: free
-    buildCommand: pip install uv && uv sync --locked
-    preDeployCommand: uv run alembic upgrade head && uv run python -m app.seed
-    startCommand: uv run uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    buildCommand: pip install -r requirements.txt
+    preDeployCommand: alembic upgrade head && python -m app.seed
+    startCommand: alembic upgrade head && python -m app.seed && uvicorn app.main:app --host 0.0.0.0 --port $PORT
     healthCheckPath: /api/health
     envVars:
       - key: DATABASE_URL
@@ -24,6 +24,10 @@ services:
         value: production
       - key: OVERDUE_HOURS
         value: "24"
+      - key: SLA_HOURS
+        value: '{"urgent": 4, "high": 8, "medium": 24, "low": 48}'
+      - key: JWT_SECRET
+        generateValue: true
       - key: CORS_ORIGINS
         value: '["http://localhost:3000"]'
 
@@ -36,6 +40,8 @@ services:
     buildCommand: npm ci && npm run build
     startCommand: npm start
     envVars:
+      - key: NODE_ENV
+        value: production
       - key: NEXT_PUBLIC_API_URL
         fromService:
           type: web

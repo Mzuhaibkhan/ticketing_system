@@ -3,7 +3,7 @@
 import React, { Suspense } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useQuery } from "@tanstack/react-query";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { Plus, AlertTriangle, RefreshCw } from "lucide-react";
 import { api } from "@/lib/api";
 import { QUERY_KEYS } from "@/lib/constants";
@@ -56,7 +56,20 @@ function TicketsContent() {
   } = useQuery({
     queryKey: QUERY_KEYS.tickets(filters as unknown as Record<string, unknown>),
     queryFn: () => api.getTickets(filters),
+    placeholderData: keepPreviousData,
   });
+
+  // Clamp page if total changes and current page exceeds maximum available pages
+  React.useEffect(() => {
+    if (data && data.total > 0) {
+      const maxPage = Math.max(1, Math.ceil(data.total / pageSize));
+      if (page > maxPage) {
+        const params = new URLSearchParams(searchParams.toString());
+        params.set("page", String(maxPage));
+        router.replace(`/tickets?${params.toString()}`, { scroll: false });
+      }
+    }
+  }, [data, page, pageSize, router, searchParams]);
 
   const handlePageChange = (newPage: number) => {
     const params = new URLSearchParams(searchParams.toString());

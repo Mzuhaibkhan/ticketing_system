@@ -8,6 +8,7 @@ import {
   ArrowLeft,
   Calendar,
   Clock,
+  CheckCircle,
   User,
   AlertCircle,
   FileText,
@@ -174,6 +175,31 @@ function TicketDetailContent() {
               {ticket.is_overdue && (
                 <OverdueBadge ageHours={ticket.age_hours} />
               )}
+              {ticket.sla_breached ? (
+                <span
+                  className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-sm text-xs font-mono font-bold uppercase tracking-wider bg-red-950/60 text-red-400 border border-red-500/40"
+                  title={`Target: ${ticket.sla_target_hours}h`}
+                >
+                  <Clock className="w-3.5 h-3.5 text-red-400" />
+                  <span>SLA BREACHED ({ticket.sla_target_hours}H TARGET)</span>
+                </span>
+              ) : ticket.first_responded_at ? (
+                <span
+                  className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-sm text-xs font-mono uppercase tracking-wider bg-[#1a1614] text-[#8c7e77] border border-[#352f2b]"
+                  title={`First responded on ${new Date(ticket.first_responded_at).toLocaleString()}`}
+                >
+                  <CheckCircle className="w-3.5 h-3.5 text-emerald-500" />
+                  <span>SLA MET ({ticket.sla_target_hours}H TARGET)</span>
+                </span>
+              ) : ticket.status !== "resolved" ? (
+                <span
+                  className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-sm text-xs font-mono uppercase tracking-wider bg-[#ff6e14]/15 text-[#ff8f3d] border border-[#ff6e14]/30"
+                  title={`Target response within ${ticket.sla_target_hours} hours of ticket creation`}
+                >
+                  <Clock className="w-3.5 h-3.5 text-[#ff6e14]" />
+                  <span>SLA TARGET: {ticket.sla_target_hours}H</span>
+                </span>
+              ) : null}
             </div>
 
             <h1

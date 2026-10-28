@@ -12,6 +12,8 @@ Designed specifically for customer support workflows: queue triage, multi-criter
 - [Tech Stack](#tech-stack)
 - [Prerequisites](#prerequisites)
 - [Quickstart Setup](#quickstart-setup)
+- [Demo Credentials](#demo-credentials)
+- [Implemented Stretch Goals](#implemented-stretch-goals)
 - [Environment Variables](#environment-variables)
 - [Database Schema and Relationships](#database-schema-and-relationships)
 - [Backend Architecture](#backend-architecture)
@@ -20,7 +22,6 @@ Designed specifically for customer support workflows: queue triage, multi-criter
 - [Continuous Integration (GitHub Actions)](#continuous-integration-github-actions)
 - [Automated Testing](#automated-testing)
 - [Deliberate Product and Technical Decisions](#deliberate-product-and-technical-decisions)
-- [Known Limitations and Production Enhancements](#known-limitations-and-production-enhancements)
 - [Walkthrough Guide](#walkthrough-guide)
 
 ---
@@ -44,8 +45,9 @@ Designed specifically for customer support workflows: queue triage, multi-criter
                       | Routers                | Services
                       v                        v
              +------------------+     +-------------------------------+
+             | /api/auth (JWT)  |     | auth (bcrypt + JWT decoder)   |
              | /api/tickets     |     | ticket_service (diff engine)  |
-             | /api/messages    |     | message_service (event bump)  |
+             | /api/messages    |     | message_service (SLA tracker) |
              | /api/dashboard   |     | dashboard_service (single agg)|
              | /api/events      |     | overdue_clause(now) (shared)  |
              | /api/agents      |     +-------------------------------+
@@ -82,6 +84,7 @@ Designed specifically for customer support workflows: queue triage, multi-criter
 | **Form Management** | React Hook Form + Zod | Schema-validated forms with inline error mapping |
 | **Notifications** | Sonner | Non-intrusive toast alerts for auto-saves and mutations |
 | **Backend Framework** | FastAPI 0.162.0 | Async REST API, automatic OpenAPI / Swagger documentation |
+| **Authentication & Security** | PyJWT, Bcrypt | Token-based authentication, password hashing, httpOnly cookies, role-based authorization |
 | **Data Validation** | Pydantic v2 | Request/response schemas, field validations, error structures |
 | **ORM & Migrations** | SQLAlchemy 2.0, Alembic | Declarative data models, relational constraints, migrations |
 | **Database** | PostgreSQL 16 (Docker) / SQLite | Relational storage with check constraints and cascade behavior |
@@ -128,10 +131,32 @@ npm run dev
 
 ### 4. Application Endpoints
 - Frontend UI: `http://localhost:3000`
+- Frontend Login: `http://localhost:3000/login`
 - Backend API Docs (Swagger): `http://localhost:8000/docs`
 - API Health Check: `http://localhost:8000/api/health`
 
 ---
+
+## Demo Credentials
+
+The database is pre-seeded with accounts for both Administrator and Agent roles. All seeded accounts share the same demo password:
+
+- **Password**: `password123`
+
+| User | Email | Role | Permissions |
+|---|---|---|---|
+| Admin User | `admin@example.com` / `admin@demo.local` | `admin` | Full system access, reassign any ticket regardless of current assignee |
+| Agent User | `agent@example.com` / `agent@demo.local` | `agent` | Manage assigned/unassigned tickets; cannot reassign tickets owned by other agents |
+| Sarah Chen | `sarah@example.com` | `admin` | Full administrative capabilities |
+| Alex Rivera | `alex@example.com` | `agent` | Standard support agent capabilities |
+| Maria Garcia | `maria@example.com` | `agent` | Standard support agent capabilities |
+| James Wilson | `james@example.com` | `agent` | Standard support agent capabilities |
+
+Instant 1-click login buttons are also provided directly on the `/login` page for fast role evaluation.
+
+---
+
+
 
 ## Environment Variables
 
@@ -141,7 +166,11 @@ npm run dev
 |---|---|---|
 | `DATABASE_URL` | `postgresql+psycopg://postgres:postgres@localhost:5432/supportdesk` | Database connection string |
 | `CORS_ORIGINS` | `["http://localhost:3000","http://127.0.0.1:3000"]` | Allowed CORS origins (JSON array or comma-separated) |
-| `OVERDUE_HOURS` | `24` | SLA response threshold in hours |
+| `JWT_SECRET` | `supportdesk-insecure-dev-secret-key-change-in-prod-32bytes` | Secret key used for signing JWT access tokens |
+| `JWT_ALGORITHM` | `HS256` | JWT cryptographic algorithm |
+| `JWT_EXPIRY_MINUTES` | `1440` | Token expiration lifetime in minutes (default: 24 hours) |
+| `SLA_HOURS` | `4` | Target first public response SLA threshold in hours |
+| `OVERDUE_HOURS` | `24` | Overall ticket overdue SLA threshold in hours |
 | `APP_ENV` | `development` | Application runtime environment |
 
 ### Frontend (`frontend/.env.local`)
@@ -284,7 +313,7 @@ The workflow defined in `.github/workflows/ci.yml` runs on all pushes and pull r
 
 ## Automated Testing
 
-The backend includes a comprehensive suite of 49 automated tests covering business logic, API validation, search behavior, and history logging.
+The backend includes a comprehensive suite of 63 automated tests covering business logic, API validation, search behavior, history logging, and all four stretch goal features.
 
 ```bash
 cd backend
@@ -309,25 +338,39 @@ uv run pytest
   - Case-insensitive search and literal `%` escaping
   - Multi-status and multi-priority filter intersections
   - Non-overlapping pagination
+- `tests/test_stretch_goals.py`:
+  - Deterministic sort tie-breaker verification (`Ticket.id.desc()`)
+  - Configurable first-response SLA targets (`SLA_HOURS`)
+  - SLA breach detection for overdue unresponded tickets
+  - Clock stop on first public reply (notes do not stop the clock)
+  - Optimistic locking version incrementing and `HTTP 409 Conflict` on version mismatch
+  - JWT login credential validation and token generation
+  - HTTP-only cookie setting and token invalidation on logout
+  - `GET /api/auth/me` identity verification
+  - `HTTP 401 Unauthorized` enforcement on protected endpoints
+  - `HTTP 403 Forbidden` enforcement when agents reassign another agent's ticket
+  - Administrator privilege bypass allowing arbitrary reassignment
 
-All 49 tests pass in approximately 1.1 seconds.
+All 63 tests pass cleanly.
 
 ---
 
 ## Deliberate Product and Technical Decisions
 
-1. **Read-Time SLA Calculation**: Rather than relying on background polling jobs or periodic database updates, the overdue state is calculated dynamically using SQL comparisons. This guarantees zero lag and prevents stale SLA states.
-2. **Actor ID Propagation**: For demo usability without a login barrier, the active agent is selected from the header and stored in `localStorage`. The selected `actor_id` is sent with mutations to populate audit events and author snapshots.
-3. **Optimized Aggregate Queries**: Dashboard statistics are computed in a single SQL query using conditional `CASE` aggregations rather than seven sequential count queries.
-4. **URL as Single Source of Truth**: Search, status, priority, assignee, sort, and overdue toggles are mirrored in URL search parameters, enabling bookmarking, browser back/forward navigation, and shareable links.
+1. **Read-Time SLA Calculation**: Rather than relying on background polling jobs or periodic database updates, both ticket overdue and first-response SLA states are calculated dynamically using SQL comparisons. This guarantees zero lag and prevents stale SLA states.
+2. **JWT Authentication with Cookie and Bearer Support**: Requests authenticate via either `Authorization: Bearer <token>` or the secure `supportdesk_token` cookie, enabling flexible client and SSR integration.
+3. **Role-Based Reassignment Invariants**: To prevent agent conflict, regular agents cannot reassign tickets owned by others. Administrators maintain override authority.
+4. **Optimistic Locking via Integer Versions**: Protects concurrent editing workflows in multi-agent environments without requiring distributed row locking.
+5. **Optimized Aggregate Queries**: Dashboard statistics are computed in a single SQL query using conditional `CASE` aggregations rather than seven sequential count queries.
+6. **URL as Single Source of Truth**: Search, status, priority, assignee, sort, page, and overdue toggles are mirrored in URL search parameters, enabling bookmarking, browser back/forward navigation, and shareable links.
 
 ---
 
-## Known Limitations and Production Enhancements
+## Production Enhancements & Roadmap
 
-1. **Authentication**: Replace client-supplied `actor_id` with session-based JWT authentication and server-side role validation.
-2. **Search Scaling**: Transition from SQL `ILIKE` pattern matching to PostgreSQL Full-Text Search (`tsvector` / `tsquery`) with GIN indexing for million-row datasets.
-3. **Concurrency Control**: Introduce optimistic concurrency checks (`ETag` / `If-Match` against `updated_at`) to prevent concurrent overwrite collisions in the properties panel.
+1. **Search Scaling**: Transition from SQL `ILIKE` pattern matching to PostgreSQL Full-Text Search (`tsvector` / `tsquery`) with GIN indexing for million-row datasets.
+2. **Real-Time Live Updates**: Introduce WebSocket or Server-Sent Events (SSE) connections to push live ticket queue and chat events directly to connected agent browsers.
+3. **Email Ingestion**: Integrate SendGrid or AWS SES webhooks to convert inbound customer emails directly into support tickets.
 
 ---
 
