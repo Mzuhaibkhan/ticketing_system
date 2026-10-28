@@ -12,6 +12,23 @@ const nextConfig: NextConfig = {
       },
     },
   },
+  async rewrites() {
+    const rawBackend =
+      process.env.BACKEND_URL ||
+      process.env.NEXT_PUBLIC_API_URL ||
+      "http://localhost:8000";
+    let target = rawBackend.trim().replace(/\/+$/, "");
+    if (!target.startsWith("http://") && !target.startsWith("https://")) {
+      target = `http://${target}`;
+    }
+    const backendRoot = target.endsWith("/api") ? target.slice(0, -4) : target;
+    return [
+      {
+        source: "/api/:path*",
+        destination: `${backendRoot}/api/:path*`,
+      },
+    ];
+  },
 };
 
 export default nextConfig;

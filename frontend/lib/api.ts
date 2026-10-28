@@ -32,14 +32,25 @@ export class ApiError extends Error {
   }
 }
 
-const API_BASE_URL =
-  (() => {
-    let raw = (process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000").replace(/\/+$/, "");
-    if (!raw.startsWith("http://") && !raw.startsWith("https://")) {
-      raw = `https://${raw}`;
+const API_BASE_URL = (() => {
+  const envUrl = process.env.NEXT_PUBLIC_API_URL;
+  if (!envUrl) {
+    if (typeof window !== "undefined") {
+      return "/api";
     }
-    return raw.endsWith("/api") ? raw : `${raw}/api`;
-  })();
+    return "http://localhost:8000/api";
+  }
+  let raw = envUrl.trim().replace(/\/+$/, "");
+  // If an internal private host without dot was inlined (e.g. 'supportdesk-backend')
+  // fall back to relative /api in browser to avoid ERR_NAME_NOT_RESOLVED
+  if (typeof window !== "undefined" && !raw.includes(".") && !raw.includes("localhost")) {
+    return "/api";
+  }
+  if (!raw.startsWith("http://") && !raw.startsWith("https://")) {
+    raw = `https://${raw}`;
+  }
+  return raw.endsWith("/api") ? raw : `${raw}/api`;
+})();
 
 async function request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
   const url = `${API_BASE_URL}${endpoint.startsWith("/") ? "" : "/"}${endpoint}`;
