@@ -1,6 +1,8 @@
 import {
   Agent,
   DashboardStats,
+  LoginPayload,
+  LoginResponse,
   MessageCreatePayload,
   PaginatedResponse,
   Ticket,
@@ -47,9 +49,18 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
     headers.set("Content-Type", "application/json");
   }
 
+  // Attach stored JWT token if present in localStorage
+  if (typeof window !== "undefined") {
+    const token = localStorage.getItem("supportdesk_token");
+    if (token && !headers.has("Authorization")) {
+      headers.set("Authorization", `Bearer ${token}`);
+    }
+  }
+
   const response = await fetch(url, {
     ...options,
     headers,
+    credentials: "include", // Send and receive httpOnly cookies
   });
 
   if (!response.ok) {
@@ -70,6 +81,15 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
       // Body wasn't JSON
     }
 
+    // Auto-redirect to login on 401 if not already on /login
+    if (response.status === 401 && typeof window !== "undefined") {
+      if (!window.location.pathname.startsWith("/login") && !endpoint.includes("/auth/")) {
+        localStorage.removeItem("supportdesk_token");
+        // eslint-disable-next-line @next/next/no-location-assign-relative-destination
+        window.location.href = `/login?redirect=${encodeURIComponent(window.location.pathname + window.location.search)}`;
+      }
+    }
+
     throw new ApiError(response.status, errorCode, errorMessage, errorDetails);
   }
 
@@ -82,6 +102,20 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
 }
 
 export const api = {
+  // Auth
+  login: (data: LoginPayload) =>
+    request<LoginResponse>("/auth/login", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+
+  logout: () =>
+    request<{ status: string; message: string }>("/auth/logout", {
+      method: "POST",
+    }),
+
+  getMe: () => request<Agent>("/auth/me"),
+
   // Health
   getHealth: () => request<{ status: string; database: string; version: string }>("/health"),
 
@@ -157,4 +191,3 @@ export const api = {
   // Events
   getTicketEvents: (id: number | string) => request<TicketEvent[]>(`/tickets/${id}/events`),
 };
-

@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 from app.config import settings
 from app.db import get_db
 from app.core.errors import register_exception_handlers
-from app.routers import agents, tickets, messages, events, dashboard
+from app.routers import agents, tickets, messages, events, dashboard, auth
 
 
 def create_app() -> FastAPI:
@@ -31,6 +31,7 @@ def create_app() -> FastAPI:
     register_exception_handlers(app)
 
     # Register API Routers
+    app.include_router(auth.router)
     app.include_router(agents.router)
     app.include_router(tickets.router)
     app.include_router(messages.router)

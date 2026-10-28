@@ -40,8 +40,13 @@ export interface Ticket {
   created_at: string;
   updated_at: string;
   resolved_at: string | null;
+  first_responded_at?: string | null;
+  version: number;
   is_overdue: boolean;
   age_hours: number;
+  sla_target_hours: number;
+  sla_due_at?: string | null;
+  sla_breached: boolean;
 }
 
 export interface TicketMessage {
@@ -90,7 +95,7 @@ export interface TicketFilters {
   priority?: TicketPriority[];
   assignee_id?: string;
   overdue?: boolean;
-  sort?: "updated" | "priority";
+  sort?: "updated" | "priority" | "created";
   page?: number;
   page_size?: number;
 }
@@ -115,6 +120,7 @@ export interface TicketUpdatePayload {
   status?: TicketStatus;
   assignee_id?: number | null;
   actor_id?: number | null;
+  expected_version?: number;
 }
 
 export interface MessageCreatePayload {
@@ -123,3 +129,12 @@ export interface MessageCreatePayload {
   author_id?: number | null;
 }
 
+export interface LoginPayload {
+  email: string;
+  password: string;
+}
+
+export interface LoginResponse {
+  token: string;
+  agent: Agent;
+}

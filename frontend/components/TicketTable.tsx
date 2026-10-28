@@ -1,6 +1,6 @@
 import React from "react";
 import Link from "next/link";
-import { User, ChevronLeft, ChevronRight } from "lucide-react";
+import { User, ChevronLeft, ChevronRight, Clock, CheckCircle } from "lucide-react";
 import { Ticket } from "@/lib/types";
 import { StatusBadge } from "@/components/badges/StatusBadge";
 import { PriorityBadge } from "@/components/badges/PriorityBadge";
@@ -97,7 +97,17 @@ export function TicketTable({
             </tr>
           </thead>
           <tbody className="divide-y divide-[#2a2420]">
-            {tickets.map((ticket) => {
+            {tickets.length === 0 ? (
+              <tr>
+                <td
+                  colSpan={7}
+                  className="py-12 text-center text-[#8c7e77] font-mono text-xs uppercase tracking-widest"
+                >
+                  NO TICKETS FOUND IN THIS VIEW
+                </td>
+              </tr>
+            ) : (
+              tickets.map((ticket) => {
               const isOverdue = ticket.is_overdue;
 
               return (
@@ -117,7 +127,7 @@ export function TicketTable({
                     #{ticket.id}
                   </td>
 
-                  {/* Subject + Overdue badge */}
+                  {/* Subject + Overdue & SLA badge */}
                   <td className="py-4 px-4">
                     <div className="flex flex-col items-start gap-1">
                       <Link
@@ -126,13 +136,39 @@ export function TicketTable({
                       >
                         {ticket.subject}
                       </Link>
-                      {isOverdue && (
-                        <OverdueBadge
-                          ageHours={ticket.age_hours}
-                          size="sm"
-                          className="mt-0.5"
-                        />
-                      )}
+                      <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
+                        {isOverdue && (
+                          <OverdueBadge
+                            ageHours={ticket.age_hours}
+                            size="sm"
+                          />
+                        )}
+                        {ticket.sla_breached ? (
+                          <span
+                            className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-mono font-bold uppercase tracking-wider bg-red-950/40 text-red-400 border border-red-500/30"
+                            title={`SLA Target: ${ticket.sla_target_hours}h`}
+                          >
+                            <Clock className="w-2.5 h-2.5" />
+                            <span>SLA BREACHED</span>
+                          </span>
+                        ) : ticket.first_responded_at ? (
+                          <span
+                            className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-mono uppercase tracking-wider bg-[#26201d] text-[#8c7e77] border border-[#352f2b]"
+                            title={`Responded within ${ticket.sla_target_hours}h target`}
+                          >
+                            <CheckCircle className="w-2.5 h-2.5 text-emerald-500" />
+                            <span>SLA MET</span>
+                          </span>
+                        ) : ticket.status !== "resolved" ? (
+                          <span
+                            className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-mono uppercase tracking-wider bg-[#ff6e14]/10 text-[#ff8f3d] border border-[#ff6e14]/20"
+                            title={`First response due in ${ticket.sla_target_hours}h`}
+                          >
+                            <Clock className="w-2.5 h-2.5 text-[#ff6e14]" />
+                            <span>SLA {ticket.sla_target_hours || 4}H</span>
+                          </span>
+                        ) : null}
+                      </div>
                     </div>
                   </td>
 
@@ -192,46 +228,48 @@ export function TicketTable({
                   </td>
                 </tr>
               );
-            })}
+            }))}
           </tbody>
         </table>
       </div>
 
       {/* Pagination Footer */}
-      <div
-        className="px-4 py-3 bg-[#1a1614] border-t border-[#2a2420] flex items-center justify-between text-xs text-[#8c7e77] font-mono"
-        style={{ fontFamily: "var(--font-mono)" }}
-      >
-        <div>
-          SHOWING <span className="text-[#e3e3db] font-bold">{startItem}</span> -{" "}
-          <span className="text-[#e3e3db] font-bold">{endItem}</span> OF{" "}
-          <span className="text-[#ff6e14] font-bold">{total}</span> TICKETS
-        </div>
+      {total > pageSize && (
+        <div
+          className="px-4 py-3 bg-[#1a1614] border-t border-[#2a2420] flex items-center justify-between text-xs text-[#8c7e77] font-mono"
+          style={{ fontFamily: "var(--font-mono)" }}
+        >
+          <div>
+            SHOWING <span className="text-[#e3e3db] font-bold">{startItem}</span> -{" "}
+            <span className="text-[#e3e3db] font-bold">{endItem}</span> OF{" "}
+            <span className="text-[#ff6e14] font-bold">{total}</span> TICKETS
+          </div>
 
-        <div className="flex items-center gap-1.5">
-          <button
-            type="button"
-            disabled={page <= 1}
-            onClick={() => onPageChange(page - 1)}
-            className="p-1.5 rounded-sm border border-[#352f2b] bg-[#251f1c] text-[#e3e3db] disabled:opacity-30 disabled:cursor-not-allowed hover:border-[#ff6e14] hover:text-[#ff6e14] transition-colors cursor-pointer"
-            aria-label="Previous page"
-          >
-            <ChevronLeft className="w-4 h-4" />
-          </button>
-          <span className="px-2 font-mono text-[#e3e3db]">
-            {page} / {totalPages}
-          </span>
-          <button
-            type="button"
-            disabled={page >= totalPages}
-            onClick={() => onPageChange(page + 1)}
-            className="p-1.5 rounded-sm border border-[#352f2b] bg-[#251f1c] text-[#e3e3db] disabled:opacity-30 disabled:cursor-not-allowed hover:border-[#ff6e14] hover:text-[#ff6e14] transition-colors cursor-pointer"
-            aria-label="Next page"
-          >
-            <ChevronRight className="w-4 h-4" />
-          </button>
+          <div className="flex items-center gap-1.5">
+            <button
+              type="button"
+              disabled={page <= 1}
+              onClick={() => onPageChange(page - 1)}
+              className="p-1.5 rounded-sm border border-[#352f2b] bg-[#251f1c] text-[#e3e3db] disabled:opacity-30 disabled:cursor-not-allowed hover:border-[#ff6e14] hover:text-[#ff6e14] transition-colors cursor-pointer"
+              aria-label="Previous page"
+            >
+              <ChevronLeft className="w-4 h-4" />
+            </button>
+            <span className="px-2 font-mono text-[#e3e3db]">
+              {page} / {totalPages}
+            </span>
+            <button
+              type="button"
+              disabled={page >= totalPages}
+              onClick={() => onPageChange(page + 1)}
+              className="p-1.5 rounded-sm border border-[#352f2b] bg-[#251f1c] text-[#e3e3db] disabled:opacity-30 disabled:cursor-not-allowed hover:border-[#ff6e14] hover:text-[#ff6e14] transition-colors cursor-pointer"
+              aria-label="Next page"
+            >
+              <ChevronRight className="w-4 h-4" />
+            </button>
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }

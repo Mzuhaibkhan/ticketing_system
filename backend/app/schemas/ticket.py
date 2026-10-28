@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator, model_validator
 from app.models.enums import TicketStatus, TicketPriority
@@ -74,6 +74,7 @@ class TicketUpdate(BaseModel):
     status: Optional[TicketStatus] = None
     assignee_id: Optional[int] = None
     actor_id: Optional[int] = None
+    expected_version: Optional[int] = None
 
     @field_validator("subject")
     @classmethod
@@ -125,8 +126,13 @@ class TicketOut(BaseModel):
     created_at: datetime
     updated_at: datetime
     resolved_at: Optional[datetime] = None
+    first_responded_at: Optional[datetime] = None
+    version: int = 1
     is_overdue: bool
     age_hours: float
+    sla_target_hours: int = 24
+    sla_due_at: Optional[datetime] = None
+    sla_breached: bool = False
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -156,6 +162,19 @@ class TicketOut(BaseModel):
                 (now - created_at).total_seconds() > settings.OVERDUE_HOURS * 3600
             )
 
+        # Compute SLA target & breach
+        sla_hours_dict = settings.SLA_HOURS if isinstance(settings.SLA_HOURS, dict) else {"urgent": 4, "high": 8, "medium": 24, "low": 48}
+        target_hours = sla_hours_dict.get(ticket.priority.value, 24)
+        due_at = created_at + timedelta(hours=target_hours)
+
+        if ticket.first_responded_at is not None:
+            first_resp = ticket.first_responded_at
+            if first_resp.tzinfo is None:
+                first_resp = first_resp.replace(tzinfo=timezone.utc)
+            sla_breached = first_resp > due_at
+        else:
+            sla_breached = ticket.status != TicketStatus.RESOLVED and now > due_at
+
         assignee_brief = None
         if ticket.assignee:
             assignee_brief = AgentBrief(id=ticket.assignee.id, name=ticket.assignee.name)
@@ -173,7 +192,11 @@ class TicketOut(BaseModel):
             created_at=ticket.created_at,
             updated_at=ticket.updated_at,
             resolved_at=ticket.resolved_at,
+            first_responded_at=getattr(ticket, "first_responded_at", None),
+            version=getattr(ticket, "version", 1) or 1,
             is_overdue=overdue,
             age_hours=age_hours,
+            sla_target_hours=target_hours,
+            sla_due_at=due_at,
+            sla_breached=sla_breached,
         )
-

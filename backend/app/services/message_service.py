@@ -68,8 +68,10 @@ def add_message(
     )
     db.add(event)
 
-    # 5. Bump ticket's updated_at
+    # 5. Bump ticket's updated_at and record first public reply for SLA
     ticket.updated_at = now
+    if data.kind == MessageKind.PUBLIC_REPLY and getattr(ticket, "first_responded_at", None) is None:
+        ticket.first_responded_at = now
 
     # 6. Single transaction commit
     db.commit()
@@ -92,4 +94,3 @@ def list_messages(db: Session, ticket_id: int) -> List[TicketMessage]:
         .order_by(TicketMessage.created_at.asc())
         .all()
     )
-

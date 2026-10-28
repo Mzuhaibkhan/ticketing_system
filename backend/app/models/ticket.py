@@ -54,6 +54,8 @@ class Ticket(Base):
         onupdate=func.now()
     )
     resolved_at = Column(DateTime(timezone=True), nullable=True)
+    first_responded_at = Column(DateTime(timezone=True), nullable=True)
+    version = Column(Integer, nullable=False, default=1, server_default="1")
 
     __table_args__ = (
         CheckConstraint(

@@ -48,6 +48,7 @@ export function EditTicketModal({ ticket, isOpen, onClose }: EditTicketModalProp
         customer_email: trimmedEmail,
         description: trimmedDesc,
         actor_id: actingAgentId,
+        expected_version: ticket.version,
       });
     },
     onSuccess: (updatedTicket) => {
@@ -60,7 +61,10 @@ export function EditTicketModal({ ticket, isOpen, onClose }: EditTicketModalProp
       onClose();
     },
     onError: (err: unknown) => {
-      if (err instanceof ApiError) {
+      if (err instanceof ApiError && err.status === 409) {
+        setErrorMsg("Version conflict: this ticket was modified by another agent. Please refresh.");
+        queryClient.invalidateQueries({ queryKey: QUERY_KEYS.ticket(ticket.id) });
+      } else if (err instanceof ApiError) {
         setErrorMsg(err.message);
       } else if (err instanceof Error) {
         setErrorMsg(err.message);

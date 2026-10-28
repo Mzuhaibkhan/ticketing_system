@@ -41,7 +41,7 @@ export default function RootLayout({
               >
                 <Header />
               </Suspense>
-              <main className="flex-1 overflow-y-auto bg-[#1a1614] p-4 sm:p-8">
+              <main className="flex-1 overflow-y-auto bg-[#1a1614] p-4 sm:p-8 flex flex-col">
                 {children}
               </main>
             </div>

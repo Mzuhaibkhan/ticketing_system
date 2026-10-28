@@ -45,6 +45,9 @@ os.environ["DATABASE_URL"] = TEST_DB_URL
 
 from fastapi.testclient import TestClient  # noqa: E402
 from app.main import app  # noqa: E402  (adjust if your app object lives elsewhere)
+from app.core.auth import get_current_agent  # noqa: E402
+from app.models.agent import Agent  # noqa: E402
+from app.models.enums import AgentRole  # noqa: E402
 
 DEMO_AGENTS = [
     ("Test Agent One", "agent1@test.local"),
@@ -99,7 +102,27 @@ def _clean_db(engine):
                 ),
                 {"n": name, "e": email},
             )
+        conn.execute(
+            text("UPDATE agents SET role = 'admin' WHERE email = 'agent1@test.local'")
+        )
     yield
+
+
+@pytest.fixture(autouse=True)
+def _auth_override(engine):
+    """Automatically authenticate API test requests with an admin test agent."""
+    def _get_test_agent():
+        with engine.connect() as conn:
+            row = conn.execute(
+                text("SELECT id, name, email, role FROM agents WHERE email LIKE '%@test.local' ORDER BY id LIMIT 1")
+            ).mappings().first()
+            if row:
+                return Agent(id=row["id"], name=row["name"], email=row["email"], role=AgentRole.ADMIN)
+            return Agent(id=1, name="Test Agent One", email="agent1@test.local", role=AgentRole.ADMIN)
+
+    app.dependency_overrides[get_current_agent] = _get_test_agent
+    yield
+    app.dependency_overrides.pop(get_current_agent, None)
 
 
 @pytest.fixture
