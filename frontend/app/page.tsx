@@ -91,6 +91,7 @@ export default function DashboardPage() {
         {/* Total */}
         <StatCard
           title="Total Tickets"
+          subtitle="All tickets across lifecycle"
           count={stats?.total}
           href="/tickets"
           icon={Inbox}
@@ -102,6 +103,7 @@ export default function DashboardPage() {
         {/* Open */}
         <StatCard
           title="Open Tickets"
+          subtitle="Status = Open"
           count={stats?.open}
           href="/tickets?status=open"
           icon={Activity}
@@ -113,6 +115,7 @@ export default function DashboardPage() {
         {/* In Progress */}
         <StatCard
           title="In Progress"
+          subtitle="Active agent response"
           count={stats?.in_progress}
           href="/tickets?status=in_progress"
           icon={Clock}
@@ -124,6 +127,7 @@ export default function DashboardPage() {
         {/* Resolved */}
         <StatCard
           title="Resolved"
+          subtitle="Completed tickets"
           count={stats?.resolved}
           href="/tickets?status=resolved"
           icon={CheckCircle2}
@@ -135,8 +139,9 @@ export default function DashboardPage() {
         {/* Urgent */}
         <StatCard
           title="Urgent Tickets"
+          subtitle="Unresolved urgent attention"
           count={stats?.urgent}
-          href="/tickets?priority=urgent"
+          href="/tickets?priority=urgent&status=open&status=in_progress&status=waiting_on_customer"
           icon={Flame}
           colorClass="text-rose-600 dark:text-rose-400"
           accentBgClass="bg-rose-50 dark:bg-rose-950/40"
@@ -146,6 +151,7 @@ export default function DashboardPage() {
         {/* Overdue */}
         <StatCard
           title="Overdue (>24h)"
+          subtitle="Unresolved > 24h SLA"
           count={stats?.overdue}
           href="/tickets?overdue=true"
           icon={AlertCircle}

@@ -11,6 +11,7 @@ interface StatCardProps {
   colorClass: string;
   accentBgClass: string;
   loading?: boolean;
+  subtitle?: string;
 }
 
 export function StatCard({
@@ -21,19 +22,27 @@ export function StatCard({
   colorClass,
   accentBgClass,
   loading = false,
+  subtitle,
 }: StatCardProps) {
   return (
     <Link
       href={href}
       className="group relative bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-5 shadow-xs hover:shadow-md hover:border-slate-300 dark:hover:border-slate-700 transition-all flex flex-col justify-between"
     >
-      <div className="flex items-center justify-between mb-4">
-        <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-          {title}
-        </span>
+      <div className="flex items-center justify-between mb-3">
+        <div>
+          <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider block">
+            {title}
+          </span>
+          {subtitle && (
+            <span className="text-[11px] text-slate-400 dark:text-slate-500 mt-0.5 block">
+              {subtitle}
+            </span>
+          )}
+        </div>
         <div
           className={cn(
-            "w-9 h-9 rounded-lg flex items-center justify-center transition-transform group-hover:scale-105",
+            "w-9 h-9 rounded-lg flex items-center justify-center transition-transform group-hover:scale-105 flex-shrink-0",
             accentBgClass
           )}
         >
