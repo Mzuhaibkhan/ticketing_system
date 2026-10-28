@@ -24,17 +24,17 @@ export function PropertiesPanel({ ticket }: PropertiesPanelProps) {
     ticket.assignee_id ? String(ticket.assignee_id) : ""
   );
 
-  React.useEffect(() => {
+  const [prevTicket, setPrevTicket] = useState(ticket);
+  if (
+    prevTicket.status !== ticket.status ||
+    prevTicket.priority !== ticket.priority ||
+    prevTicket.assignee_id !== ticket.assignee_id
+  ) {
+    setPrevTicket(ticket);
     setSelectedStatus(ticket.status);
-  }, [ticket.status]);
-
-  React.useEffect(() => {
     setSelectedPriority(ticket.priority);
-  }, [ticket.priority]);
-
-  React.useEffect(() => {
     setSelectedAssignee(ticket.assignee_id ? String(ticket.assignee_id) : "");
-  }, [ticket.assignee_id]);
+  }
 
   const [savingField, setSavingField] = useState<"status" | "priority" | "assignee" | null>(null);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);

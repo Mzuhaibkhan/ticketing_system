@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState, useTransition } from "react";
+import React, { useCallback, useEffect, useState, useTransition } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Search, X, RotateCcw } from "lucide-react";
 import { TicketPriority, TicketStatus } from "@/lib/types";
@@ -36,10 +36,34 @@ export function TicketFilters() {
 
   // Local state for 300ms search debounce
   const [searchTerm, setSearchTerm] = useState(currentQ);
-
-  useEffect(() => {
+  const [prevQ, setPrevQ] = useState(currentQ);
+  if (prevQ !== currentQ) {
+    setPrevQ(currentQ);
     setSearchTerm(currentQ);
-  }, [currentQ]);
+  }
+
+  const updateFilter = useCallback(
+    (key: string, value: string | string[] | boolean | null) => {
+      const params = new URLSearchParams(searchParams.toString());
+
+      // Reset pagination to page 1 on filter modification
+      params.delete("page");
+
+      if (value === null || value === "" || value === false || (Array.isArray(value) && value.length === 0)) {
+        params.delete(key);
+      } else if (Array.isArray(value)) {
+        params.delete(key);
+        value.forEach((v) => params.append(key, v));
+      } else {
+        params.set(key, String(value));
+      }
+
+      startTransition(() => {
+        router.push(`/tickets?${params.toString()}`, { scroll: false });
+      });
+    },
+    [searchParams, router, startTransition]
+  );
 
   // Sync search input after 300ms debounce
   useEffect(() => {
@@ -50,30 +74,7 @@ export function TicketFilters() {
     }, 300);
 
     return () => clearTimeout(timer);
-  }, [searchTerm, currentQ]);
-
-  const updateFilter = (
-    key: string,
-    value: string | string[] | boolean | null
-  ) => {
-    const params = new URLSearchParams(searchParams.toString());
-
-    // Reset pagination to page 1 on filter modification
-    params.delete("page");
-
-    if (value === null || value === "" || value === false || (Array.isArray(value) && value.length === 0)) {
-      params.delete(key);
-    } else if (Array.isArray(value)) {
-      params.delete(key);
-      value.forEach((v) => params.append(key, v));
-    } else {
-      params.set(key, String(value));
-    }
-
-    startTransition(() => {
-      router.push(`/tickets?${params.toString()}`, { scroll: false });
-    });
-  };
+  }, [searchTerm, currentQ, updateFilter]);
 
   const toggleStatus = (st: TicketStatus) => {
     const next = currentStatuses.includes(st)
