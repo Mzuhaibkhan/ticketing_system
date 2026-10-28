@@ -79,3 +79,4 @@ npm run dev
 
 The backend exposes a health check endpoint:
 - `GET http://localhost:8000/api/health` -> `{ "status": "ok", "database": "connected" }`
+
