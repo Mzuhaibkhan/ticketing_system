@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 from app.config import settings
 from app.db import get_db
 from app.core.errors import register_exception_handlers
+from app.routers import agents, tickets, messages, events, dashboard
 
 
 def create_app() -> FastAPI:
@@ -28,6 +29,13 @@ def create_app() -> FastAPI:
     # Register uniform exception handlers
     register_exception_handlers(app)
 
+    # Register API Routers
+    app.include_router(agents.router)
+    app.include_router(tickets.router)
+    app.include_router(messages.router)
+    app.include_router(events.router)
+    app.include_router(dashboard.router)
+
     @app.get("/api/health", status_code=status.HTTP_200_OK, tags=["Health"])
     def health_check(db: Session = Depends(get_db)):
         try:
@@ -46,4 +54,3 @@ def create_app() -> FastAPI:
 
 
 app = create_app()
-
