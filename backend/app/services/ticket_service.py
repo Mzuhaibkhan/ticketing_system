@@ -113,12 +113,13 @@ def list_tickets(
 
     # Text search
     if q and q.strip():
-        term = f"%{q.strip()}%"
+        escaped_q = q.strip().replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+        term = f"%{escaped_q}%"
         query = query.filter(
             or_(
-                Ticket.subject.ilike(term),
-                Ticket.customer_name.ilike(term),
-                Ticket.customer_email.ilike(term)
+                Ticket.subject.ilike(term, escape="\\"),
+                Ticket.customer_name.ilike(term, escape="\\"),
+                Ticket.customer_email.ilike(term, escape="\\")
             )
         )
 

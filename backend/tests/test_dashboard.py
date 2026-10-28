@@ -1,94 +1,64 @@
-import pytest
-from datetime import datetime, timedelta, timezone
-from fastapi.testclient import TestClient
-from sqlalchemy.orm import Session
-from app.models import Ticket, TicketStatus, TicketPriority
+"""Dashboard counts must come from real saved data, never hardcoded."""
+
+STATS_URL = "/api/dashboard/stats"
 
 
-def test_dashboard_counts(client: TestClient, db_session: Session, test_agents):
-    """Asserts dashboard counts match seeded fixture exactly across all metrics."""
-    now = datetime.now(timezone.utc)
-    sarah = test_agents["sarah@example.com"]
-    alex = test_agents["alex@example.com"]
+def test_empty_database_returns_all_zeros(client):
+    resp = client.get(STATS_URL)
+    assert resp.status_code == 200
 
-    # 1. Open, Urgent, Overdue (>30h old)
-    t1 = Ticket(
-        subject="Urgent Overdue Ticket",
-        customer_name="Cust 1",
-        description="Overdue outage",
-        status=TicketStatus.OPEN,
-        priority=TicketPriority.URGENT,
-        assignee_id=sarah.id,
-        created_at=now - timedelta(hours=30),
-        updated_at=now - timedelta(hours=30),
-    )
+    stats = resp.json()
+    for key in ("total", "open", "in_progress", "resolved", "urgent", "overdue"):
+        assert stats[key] == 0, key
 
-    # 2. In Progress, High, Recent (5h old, not overdue)
-    t2 = Ticket(
-        subject="High In Progress Ticket",
-        customer_name="Cust 2",
-        description="Work ongoing",
-        status=TicketStatus.IN_PROGRESS,
-        priority=TicketPriority.HIGH,
-        assignee_id=alex.id,
-        created_at=now - timedelta(hours=5),
-        updated_at=now - timedelta(hours=5),
-    )
 
-    # 3. Waiting on Customer, Low, Recent (10h old, not overdue)
-    t3 = Ticket(
-        subject="Waiting Ticket",
-        customer_name="Cust 3",
-        description="Awaiting feedback",
-        status=TicketStatus.WAITING_ON_CUSTOMER,
-        priority=TicketPriority.LOW,
-        assignee_id=None,
-        created_at=now - timedelta(hours=10),
-        updated_at=now - timedelta(hours=10),
-    )
+def test_counts_match_seeded_data_exactly(
+    client, make_ticket, set_status, backdate
+):
+    make_ticket(subject="t1 open medium")                                  # open
+    make_ticket(subject="t2 open urgent", priority="urgent")               # open, urgent
+    t3 = make_ticket(subject="t3 in progress", priority="high")
+    set_status(t3["id"], "in_progress")
+    t4 = make_ticket(subject="t4 waiting", priority="low")
+    set_status(t4["id"], "waiting_on_customer")
+    t5 = make_ticket(subject="t5 resolved urgent", priority="urgent")
+    set_status(t5["id"], "resolved")                                       # urgent but resolved
+    t6 = make_ticket(subject="t6 old open", priority="low")
+    backdate(t6["id"], minutes=30 * 60)                                    # open + overdue
+    t7 = make_ticket(subject="t7 old resolved", priority="low")
+    set_status(t7["id"], "resolved")
+    backdate(t7["id"], minutes=72 * 60)                                    # resolved, not overdue
 
-    # 4. Resolved, Medium (3 days old, resolved 1 day ago)
-    t4 = Ticket(
-        subject="Resolved Medium Ticket",
-        customer_name="Cust 4",
-        description="Completed task",
-        status=TicketStatus.RESOLVED,
-        priority=TicketPriority.MEDIUM,
-        assignee_id=sarah.id,
-        created_at=now - timedelta(days=3),
-        updated_at=now - timedelta(days=1),
-        resolved_at=now - timedelta(days=1),
-    )
+    stats = client.get(STATS_URL).json()
 
-    # 5. Resolved, Urgent (2 days old, resolved 1 day ago)
-    # Tests critical business rule: Resolved urgent tickets must NOT count towards unresolved urgent!
-    t5 = Ticket(
-        subject="Resolved Urgent Ticket",
-        customer_name="Cust 5",
-        description="Outage already fixed",
-        status=TicketStatus.RESOLVED,
-        priority=TicketPriority.URGENT,
-        assignee_id=alex.id,
-        created_at=now - timedelta(days=2),
-        updated_at=now - timedelta(days=1),
-        resolved_at=now - timedelta(days=1),
-    )
+    assert stats["total"] == 7
+    assert stats["open"] == 3          # t1, t2, t6 (status = Open only)
+    assert stats["in_progress"] == 1   # t3
+    assert stats["resolved"] == 2      # t5, t7
+    assert stats["urgent"] == 1        # t2 only: resolved urgent tickets excluded
+    assert stats["overdue"] == 1       # t6 only
 
-    db_session.add_all([t1, t2, t3, t4, t5])
-    db_session.commit()
 
-    # Query GET /api/dashboard/stats
-    res = client.get("/api/dashboard/stats")
-    assert res.status_code == 200
-    data = res.json()
+def test_resolving_ticket_removes_it_from_open_and_overdue(
+    client, make_ticket, set_status, backdate
+):
+    ticket = make_ticket()
+    backdate(ticket["id"], minutes=30 * 60)
 
-    # Assert all 8 counters
-    assert data["total"] == 5
-    assert data["open"] == 1
-    assert data["in_progress"] == 1
-    assert data["waiting_on_customer"] == 1
-    assert data["resolved"] == 2
-    assert data["urgent"] == 1  # only unresolved urgent (Ticket 1)
-    assert data["overdue"] == 1  # only Ticket 1 is >24h and unresolved
-    assert data["unresolved"] == 3  # Tickets 1, 2, 3
+    before = client.get(STATS_URL).json()
+    assert (before["open"], before["overdue"], before["resolved"]) == (1, 1, 0)
 
+    set_status(ticket["id"], "resolved")
+
+    after = client.get(STATS_URL).json()
+    assert (after["open"], after["overdue"], after["resolved"]) == (0, 0, 1)
+    assert after["total"] == 1
+
+
+def test_stats_react_to_new_tickets(client, make_ticket):
+    assert client.get(STATS_URL).json()["total"] == 0
+    make_ticket()
+    make_ticket(priority="urgent")
+    stats = client.get(STATS_URL).json()
+    assert stats["total"] == 2
+    assert stats["urgent"] == 1

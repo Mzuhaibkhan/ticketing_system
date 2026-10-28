@@ -25,7 +25,7 @@ def upgrade() -> None:
     sa.Column('id', sa.Integer(), autoincrement=True, nullable=False),
     sa.Column('name', sa.String(length=100), nullable=False),
     sa.Column('email', sa.String(length=255), nullable=False),
-    sa.Column('role', sa.Enum('admin', 'agent', name='agentrole'), nullable=False),
+    sa.Column('role', sa.Enum('admin', 'agent', name='agentrole'), nullable=False, server_default='agent'),
     sa.PrimaryKeyConstraint('id')
     )
     with op.batch_alter_table('agents', schema=None) as batch_op:

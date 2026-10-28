@@ -13,7 +13,8 @@ class Agent(Base):
     role = Column(
         SAEnum(AgentRole, values_callable=lambda x: [e.value for e in x]),
         nullable=False,
-        default=AgentRole.AGENT
+        default=AgentRole.AGENT,
+        server_default="agent"
     )
 
     tickets = relationship("Ticket", back_populates="assignee", foreign_keys="Ticket.assignee_id")
